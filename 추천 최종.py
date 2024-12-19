@@ -76,7 +76,11 @@ def filter_by_mood(cocktail_data, mood_preference='잘모르겠음'):
     }
     categories = mood_categories.get(mood_preference, [])
     filtered_cocktails = cocktail_data[cocktail_data['strCategory'].isin(categories)]
-    return filtered_cocktails
+    
+    if filtered_cocktails.empty:
+        return cocktail_data
+    else:
+        return filtered_cocktails
 
 # Step 5: 추천 출력 함수
 def recommend_cocktails(filtered_cocktails):
@@ -98,7 +102,7 @@ class CocktailRecommendationApp:
         self.root.geometry("1280x720")
 
         # 배경 이미지 추가
-        bg_image = Image.open(r"C:\Users\kimmingu\Desktop\칵테일\스크린샷 2024-12-13 143255.png")
+        bg_image = Image.open(r"C:\Users\dhals\Downloads\KakaoTalk_20241219_001643519.png")
         bg_image = bg_image.resize((1280, 720), Image.Resampling.LANCZOS)
         self.bg_photo = ImageTk.PhotoImage(bg_image)
 
@@ -179,5 +183,5 @@ class CocktailRecommendationApp:
 # 실행
 if __name__ == "__main__":
     root = tk.Tk()
-    app = CocktailRecommendationApp(root, r"C:\Users\kimmingu\Desktop\칵테일\data_cocktails.csv")
+    app = CocktailRecommendationApp(root, r"C:\Users\dhals\Downloads\archive (4)\data_cocktails.csv")
     root.mainloop()
