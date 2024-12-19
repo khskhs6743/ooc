@@ -1,0 +1,165 @@
+import pandas as pd
+import random
+
+# Step 1: 데이터 로드 및 전처리
+def load_and_preprocess_data(file_path):
+    try:
+        data = pd.read_csv(file_path)
+    except FileNotFoundError:
+        print("데이터 파일 없습니다")
+        return None
+
+    # 알코올 강도 분류 함수
+    def classify_alcohol(alc_type):
+        weak = ['Beer', 'Cider', 'Wine', 'Champagne', 'Prosecco']
+        medium = ['Sweet Liqueur', 'Creamy Liqueur', 'Triple Sec', 'Vermouth', 'Schnapps', 'Port']
+        strong = ['Vodka', 'Rum', 'Gin', 'Whisky', 'Tequila', 'Absinthe', 'Brandy', 'Sambuca', 'Cachaca', 'Pisco', 'Ouzo']
+        
+        if alc_type in weak:
+            return '약한'
+        elif alc_type in medium:
+            return '중간'
+        elif alc_type in strong:
+            return '강한'
+        return None
+
+    # 알코올 강도 열 생성
+    data['Alcohol_level'] = data['Alc_type'].apply(classify_alcohol)
+
+    # 칵테일 이름과 재료를 기준으로 중복 제거
+    data = data.groupby('strDrink').agg({
+        'strCategory': 'first',  # 카테고리 중 첫 번째 값
+        'strGlass': 'first',  # 추천 잔 종류 중 첫 번째 값
+        'strIngredients': lambda x: ', '.join(x.dropna().astype(str)),  # 재료를 중복 없이 결합
+        'Alc_type': 'first',  # 알코올 유형 중 첫 번째 값
+        'Basic_taste': lambda x: ', '.join(x.dropna().astype(str)),  # 맛을 중복 없이 결합하지 않고 전체 개수 유지
+        'strInstructions': 'first',  # 만드는 방법 중 첫 번째 값
+        'Alcohol_level': 'first'  # 알코올 강도 중 첫 번째 값
+    }).reset_index()
+    return data
+
+
+
+
+# Step 2: 알코올 강도 필터링
+def filter_by_alcohol(cocktail_data):
+    # 알코올 강도 분포 출력
+    alcohol_counts = cocktail_data['Alcohol_level'].value_counts()
+    print("\n전체 칵테일 분포 (알코올 강도):")
+    print(f"  약한: {alcohol_counts.get('약한', 0)}개")
+    print(f"  중간: {alcohol_counts.get('중간', 0)}개")
+    print(f"  강한: {alcohol_counts.get('강한', 0)}개")
+
+    # 알코올 정도 입력
+    while True:
+        alcohol_preference = input("\n알코올 정도를 선택하세요: 약한, 중간, 강한 (잘모르겠으면 '잘모르겠음' 입력): ").strip()
+        if alcohol_preference in ['약한', '중간', '강한', '잘모르겠음']:
+            break
+        print("잘못된 입력입니다. 다시 입력해주세요.")
+
+    # 알코올 필터링 적용
+    if alcohol_preference != '잘모르겠음':
+        cocktail_data = cocktail_data[cocktail_data['Alcohol_level'] == alcohol_preference]
+
+    print(f"\n[알코올 필터링] 선택된 알코올 강도: {alcohol_preference}, 남은 칵테일 개수: {len(cocktail_data)}")
+    return alcohol_preference, cocktail_data
+
+
+
+
+# 한글-영어 맛 변환 사전
+taste_translation_dict = {
+    '신맛': 'sour',
+    '단맛': 'sweet',
+    '크리미한 맛': 'cream',
+    '쓴맛': 'bitter',
+    '맑고 담백한 맛': 'clean',
+    '민트맛': 'mint',
+    '계란맛': 'egg',
+    '짠맛': 'salty',
+    '매운맛': 'spicy'
+}
+# Step 3: 맛 필터링
+def get_taste_preferences(cocktail_data):
+    print("맛을 순서대로 입력하세요. 예: 신맛, 단맛, 크리미한 맛, 쓴맛, 맑고 담백한 맛, 민트맛, 계란맛, 짠맛, 매운맛. (입력을 종료하려면 '완료' 입력)")
+    valid_tastes = list(taste_translation_dict.keys())
+    taste_preferences = []
+
+    while True:
+        taste = input("맛: ").strip()
+        if taste.lower() == '완료':
+            break
+        if taste in valid_tastes:
+            translated_taste = taste_translation_dict[taste]
+            taste_preferences.append(translated_taste)
+        else:
+            print(f"'{taste}'은(는) 잘못된 입력입니다. 가능한 맛: {', '.join(valid_tastes)}")
+
+    # 맛 필터링
+    remaining_cocktails = cocktail_data.copy()
+    for taste in taste_preferences[:]:  # 입력된 맛 리스트 순회
+        filtered_cocktails = remaining_cocktails[remaining_cocktails['Basic_taste'].str.contains(taste, na=False)]
+        print(f"\n[맛 필터링] '{taste}' 맛 적용 후 남은 칵테일 개수: {len(filtered_cocktails)}")
+        if filtered_cocktails.empty:
+            print(f"'{taste}' 맛을 만족하는 칵테일이 없어 제외합니다.")
+            taste_preferences.remove(taste)
+        else:
+            remaining_cocktails = filtered_cocktails
+
+    return taste_preferences, remaining_cocktails
+
+
+
+
+# Step 4: 분위기 필터링
+def filter_by_mood(cocktail_data, mood_preference='잘모르겠음'):
+    if mood_preference == '잘모르겠음':
+        return cocktail_data
+
+    mood_categories = {
+        '여유로운': ['Milk / Float / Shake', 'Ordinary Drink', 'Coffee / Tea', 'Soft Drink / Soda'],
+        '파티': ['Shot', 'Punch / Party Drink'],
+        '고급스러운': ['Cocktail', 'Other/Unknown']
+    }
+
+    categories = mood_categories.get(mood_preference, [])
+    filtered_cocktails = cocktail_data[cocktail_data['strCategory'].isin(categories)]
+    print(f"\n[분위기 필터링] '{mood_preference}' 분위기 적용 후 남은 칵테일 개수: {len(filtered_cocktails)}")
+    return filtered_cocktails
+
+
+# Step 5: 추천 결과 출력
+def recommend_cocktails(filtered_cocktails):
+    if filtered_cocktails.empty:
+        print("조건에 맞는 칵테일이 없습니다. 조건을 변경해주세요!")
+        return
+
+    print("\n추천 칵테일 리스트:")
+    recommendations = filtered_cocktails.sample(n=min(5, len(filtered_cocktails)))
+    for _, row in recommendations.iterrows():
+        print(f"- {row['strDrink']}: {row['strIngredients']} ({row['strGlass']})")
+        print(f"  만드는 방법: {row['strInstructions']}\n")
+
+
+
+
+# Main
+if __name__ == "__main__":
+    # 데이터 로드
+    data_file_path = r"C:\Users\dhals\Downloads\archive (4)\data_cocktails.csv"
+    cocktail_data = load_and_preprocess_data(data_file_path)
+    if cocktail_data is None:
+        exit()
+
+    # 알코올 강도 필터링
+    alcohol_preference, filtered_cocktails = filter_by_alcohol(cocktail_data)
+
+    # 맛 필터링
+    taste_preferences, filtered_cocktails = get_taste_preferences(filtered_cocktails)
+
+    # 분위기 필터링
+    mood_preference = input("\n분위기를 선택하세요: 여유로운, 파티, 고급스러운 (잘모르겠으면 '잘모르겠음' 입력): ").strip()
+    filtered_cocktails = filter_by_mood(filtered_cocktails, mood_preference=mood_preference)
+
+    # 추천 출력
+    recommend_cocktails(filtered_cocktails)
